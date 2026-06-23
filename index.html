@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nigeria Election Dashboard</title>
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #16201d;
+      --muted: #65736e;
+      --line: #d9e1db;
+      --panel: #ffffff;
+      --panel-strong: rgba(255, 255, 255, .94);
+      --soft: #f3f6f0;
+      --map: #dfe8dd;
+      --apc: #2f7dd1;
+      --pdp: #2ca25f;
+      --lp: #c83e4d;
+      --nnpp: #d9a227;
+      --other: #6f7280;
+      --focus: #111c18;
+      --shadow: 0 18px 50px rgba(25, 42, 34, .13);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(47, 125, 209, .12), transparent 30%),
+        linear-gradient(135deg, #edf3e9 0%, #f8faf5 55%, #eef4f7 100%);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr) 390px;
+      min-height: 100vh;
+      padding: 12px;
+      gap: 12px;
+    }
+
+    aside, main, .detail {
+      min-width: 0;
+    }
+
+    aside {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 20px;
+      line-height: 1.15;
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    .status {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      color: #0f5f51;
+      background: #ecf7f3;
+      white-space: nowrap;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #394640;
+      margin-bottom: 6px;
+    }
+
+    select, input[type="search"], .file-input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--ink);
+      font: inherit;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    select:focus, input[type="search"]:focus, .file-input:focus {
+      border-color: #73a89b;
+      box-shadow: 0 0 0 3px rgba(21, 95, 85, .12);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: #fbfcf8;
+      border-radius: 10px;
+      padding: 10px;
+      min-height: 74px;
+      box-shadow: 0 8px 20px rgba(22, 32, 29, .04);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 20px;
+      margin-top: 6px;
+    }
+
+    .metric span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .segmented button, .tool-btn, .source-btn {
+      border: 0;
+      background: #fff;
+      color: var(--ink);
+      min-height: 36px;
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+      transition: background .15s ease, transform .15s ease, border-color .15s ease;
+    }
+
+    .segmented button.active {
+      background: var(--focus);
+      color: #fff;
+    }
+
+    .source-btn, .tool-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+      font-size: 13px;
+      box-shadow: 0 5px 14px rgba(22, 32, 29, .05);
+    }
+
+    .source-btn:hover, .tool-btn:hover, .segmented button:hover {
+      border-color: #9eb6ad;
+      background: #f4f8f5;
+    }
+
+    main {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: var(--map);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .toolbar {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, .08);
+      background: rgba(255, 255, 255, .90);
+      backdrop-filter: blur(10px);
+    }
+
+    .toolbar-title {
+      min-width: 0;
+    }
+
+    .toolbar-title b {
+      display: block;
+      font-size: 16px;
+    }
+
+    .toolbar-title span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: end;
+    }
+
+    #map {
+      min-height: 540px;
+      height: 100%;
+      width: 100%;
+    }
+
+    .legend {
+      position: absolute;
+      left: 14px;
+      bottom: 18px;
+      z-index: 400;
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      box-shadow: 0 14px 32px rgba(0,0,0,.12);
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid rgba(0,0,0,.2);
+      flex: 0 0 auto;
+    }
+
+    .detail {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 14px;
+      overflow: auto;
+      max-height: 100vh;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .detail h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .detail-sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 5px;
+    }
+
+    .chart-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      min-height: 280px;
+      background: #fff;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 520px;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #edf0ea;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f7f9f4;
+      color: #3c4842;
+      z-index: 1;
+    }
+
+    td.num, th.num { text-align: right; }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .source-list a {
+      color: #155f55;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .upload-panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+      background: #fbfcf8;
+    }
+
+    .leaflet-container {
+      font: inherit;
+      background: #e0e7dc;
+    }
+
+    .leaflet-popup-content {
+      margin: 10px 12px;
+      min-width: 180px;
+    }
+
+    .popup-title {
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .popup-line {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    @media (max-width: 1120px) {
+      .app {
+        grid-template-columns: 310px minmax(0, 1fr);
+      }
+      .detail {
+        grid-column: 1 / -1;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        display: block;
+        padding: 0;
+      }
+      aside, .detail {
+        border: 0;
+        border-radius: 0;
+        max-height: none;
+      }
+      main {
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+      }
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+      .toolbar-actions {
+        justify-content: start;
+      }
+      #map {
+        height: 72vh;
+        min-height: 430px;
+      }
+      .field-row, .metric-grid {
+        grid-template-columns: 1fr;
+      }
+      .legend {
+        position: static;
+        margin: 10px 12px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <h1>Nigeria Election Dashboard</h1>
+        <div class="status" id="dataStatus">Loading map</div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="electionSelect">Election</label>
+          <select id="electionSelect"></select>
+        </div>
+        <div>
+          <label for="metricSelect">Map metric</label>
+          <select id="metricSelect">
+            <option value="winner">Winner</option>
+            <option value="turnout">Turnout</option>
+            <option value="margin">Margin</option>
+            <option value="valid">Valid votes</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label>Map layer</label>
+        <div class="segmented" role="tablist" aria-label="Map layer">
+          <button id="stateLayerBtn" class="active" type="button">States</button>
+          <button id="lgaLayerBtn" type="button">LGAs</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="searchBox">Find state or LGA</label>
+        <input id="searchBox" type="search" placeholder="Search Nigeria..." />
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric"><span>Election level</span><b id="levelMetric">State</b></div>
+        <div class="metric"><span>Jurisdictions</span><b id="unitMetric">37</b></div>
+        <div class="metric"><span>Total valid votes</span><b id="votesMetric">24.0m</b></div>
+        <div class="metric"><span>Current leader</span><b id="leaderMetric">APC</b></div>
+      </div>
+
+      <div class="upload-panel">
+        <label for="csvInput">Add verified result CSV</label>
+        <input class="file-input" id="csvInput" type="file" accept=".csv,text/csv" />
+        <button class="tool-btn" id="templateBtn" type="button">Download CSV template</button>
+        <div class="hint">Expected columns: election_id, year, type, office, state, lga, ward, candidate, party, votes, registered, turnout, source_url, result_status.</div>
+      </div>
+
+      <div class="source-list">
+        <b>Source Registry</b>
+        <a href="https://www.geoboundaries.org/api/current/gbOpen/NGA/ADM1/" target="_blank" rel="noreferrer">geoBoundaries Nigeria ADM1 states</a>
+        <a href="https://www.geoboundaries.org/api/current/gbOpen/NGA/ADM2/" target="_blank" rel="noreferrer">geoBoundaries Nigeria ADM2 LGAs</a>
+        <a href="https://en.wikipedia.org/wiki/2023_Nigerian_presidential_election" target="_blank" rel="noreferrer">2023 presidential state table</a>
+        <a href="https://www.inecelectionresults.ng/" target="_blank" rel="noreferrer">INEC Result Viewing Portal</a>
+      </div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <div class="toolbar-title">
+          <b id="mapTitle">Federal Republic of Nigeria</b>
+          <span id="mapSubtitle">Click a state to inspect results and drill into LGAs.</span>
+        </div>
+        <div class="toolbar-actions">
+          <button class="tool-btn" id="resetBtn" type="button">Reset</button>
+          <button class="tool-btn" id="syncBtn" type="button">Reload Boundaries</button>
+        </div>
+      </div>
+      <div id="map"></div>
+      <div class="legend" id="legend"></div>
+    </main>
+
+    <section class="detail">
+      <div>
+        <h2 id="detailTitle">Nigeria</h2>
+        <div class="detail-sub" id="detailSubtitle">2023 presidential result by state. State boundaries and LGA boundaries are loaded from geoBoundaries/GRID3.</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="resultChart" height="260"></canvas>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Jurisdiction</th>
+              <th>Winner</th>
+              <th class="num">APC</th>
+              <th class="num">PDP</th>
+              <th class="num">LP</th>
+              <th class="num">NNPP</th>
+              <th class="num">Others</th>
+              <th class="num">Turnout</th>
+            </tr>
+          </thead>
+          <tbody id="resultRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const stateGeoUrl = "assets/nigeria-states.geojson";
+    const lgaGeoUrl = "assets/nigeria-lgas.geojson";
+
+    const partyColors = {
+      APC: "#2f7dd1",
+      PDP: "#2ca25f",
+      LP: "#c83e4d",
+      NNPP: "#d9a227",
+      OTHERS: "#6f7280",
+      NONE: "#c7cec6"
+    };
+
+    const elections = [
+      {
+        id: "2023-presidential-state",
+        year: 2023,
+        type: "general",
+        office: "President",
+        label: "2023 Presidential - state results",
+        granularity: "state",
+        status: "verified-secondary",
+        source: "Wikipedia table compiled from INEC/state result reports",
+        rows: [
+          ["Abia", 8914, 22676, 327095, 1239, 10113, 370037, 18.00],
+          ["Adamawa", 182881, 417611, 105648, 8006, 16994, 731140, 34.67],
+          ["Akwa Ibom", 160620, 214012, 132683, 7796, 39978, 555089, 24.92],
+          ["Anambra", 5111, 9036, 584621, 1967, 13126, 613861, 24.63],
+          ["Bauchi", 316694, 426607, 27373, 72103, 10739, 853516, 31.10],
+          ["Bayelsa", 42572, 68818, 49975, 540, 3420, 165325, 16.38],
+          ["Benue", 310468, 130081, 308372, 4740, 16414, 770075, 28.72],
+          ["Borno", 252282, 190921, 7205, 4626, 10253, 465287, 19.94],
+          ["Cross River", 130520, 95425, 179917, 1644, 9462, 416968, 26.10],
+          ["Delta", 90183, 161600, 341866, 3122, 18570, 615341, 20.32],
+          ["Ebonyi", 42402, 13503, 259738, 1661, 8047, 325351, 21.58],
+          ["Edo", 144471, 89585, 331163, 2743, 13304, 581266, 24.01],
+          ["Ekiti", 201494, 89554, 11397, 264, 5462, 308171, 31.84],
+          ["Enugu", 4772, 15749, 428640, 1808, 5455, 456424, 22.19],
+          ["Federal Capital Territory", 90902, 74194, 281717, 4517, 8741, 460071, 30.48],
+          ["Gombe", 146977, 317123, 26160, 10520, 9263, 510043, 33.87],
+          ["Imo", 66171, 30004, 352904, 1536, 8646, 459261, 22.10],
+          ["Jigawa", 421390, 386587, 1889, 98234, 12431, 920531, 40.78],
+          ["Kaduna", 399293, 554360, 294494, 92969, 19037, 1360153, 32.33],
+          ["Kano", 517341, 131716, 28513, 997279, 27156, 1702005, 30.15],
+          ["Katsina", 482283, 489045, 6376, 69386, 11583, 1058673, 31.03],
+          ["Kebbi", 248088, 285175, 10682, 5038, 10539, 559522, 29.81],
+          ["Kogi", 240751, 145104, 56217, 4238, 10480, 456790, 24.63],
+          ["Kwara", 263572, 136909, 31186, 3141, 35203, 469971, 29.29],
+          ["Lagos", 572606, 75750, 582454, 8442, 32199, 1271451, 18.92],
+          ["Nasarawa", 172922, 147093, 191361, 12715, 16475, 540566, 21.82],
+          ["Niger", 375183, 284898, 80452, 21836, 16299, 778668, 30.49],
+          ["Ogun", 341554, 123831, 85829, 2200, 26710, 580124, 22.75],
+          ["Ondo", 369924, 115463, 44405, 930, 20286, 551008, 28.62],
+          ["Osun", 343945, 354366, 23283, 713, 10896, 733203, 38.71],
+          ["Oyo", 449884, 182977, 99110, 4095, 73419, 809485, 26.32],
+          ["Plateau", 307195, 243808, 466272, 8869, 62026, 1088170, 40.33],
+          ["Rivers", 231591, 88468, 175071, 1322, 27199, 523651, 16.71],
+          ["Sokoto", 285444, 288679, 6568, 1300, 4824, 586815, 29.84],
+          ["Taraba", 135165, 189017, 146315, 12818, 16043, 499358, 26.67],
+          ["Yobe", 151459, 196567, 2406, 18270, 7695, 378397, 26.75],
+          ["Zamfara", 298396, 193978, 1660, 4044, 4845, 502923, 27.64]
+        ].map(toElectionRow)
+      },
+      {
+        id: "registry-placeholder",
+        year: "Open",
+        type: "registry",
+        office: "All offices",
+        label: "Data registry - import verified results",
+        granularity: "mixed",
+        status: "import-ready",
+        source: "Awaiting official/state/LGA CSV imports",
+        rows: []
+      }
+    ];
+
+    const stateAliases = new Map([
+      ["fct", "Federal Capital Territory"],
+      ["f.c.t.", "Federal Capital Territory"],
+      ["federal capital territory", "Federal Capital Territory"],
+      ["abuja", "Federal Capital Territory"]
+    ]);
+
+    const stateCentroids = [
+      ["Abia", 5.45, 7.52], ["Adamawa", 9.33, 12.50], ["Akwa Ibom", 5.00, 7.85],
+      ["Anambra", 6.22, 6.94], ["Bauchi", 10.31, 9.84], ["Bayelsa", 4.77, 6.07],
+      ["Benue", 7.35, 8.73], ["Borno", 11.88, 13.15], ["Cross River", 5.87, 8.60],
+      ["Delta", 5.70, 5.93], ["Ebonyi", 6.26, 8.10], ["Edo", 6.54, 5.89],
+      ["Ekiti", 7.67, 5.31], ["Enugu", 6.55, 7.51], ["Federal Capital Territory", 9.08, 7.49],
+      ["Gombe", 10.29, 11.17], ["Imo", 5.49, 7.04], ["Jigawa", 12.23, 9.56],
+      ["Kaduna", 10.52, 7.44], ["Kano", 11.99, 8.52], ["Katsina", 12.98, 7.62],
+      ["Kebbi", 11.68, 4.07], ["Kogi", 7.80, 6.74], ["Kwara", 8.50, 4.55],
+      ["Lagos", 6.52, 3.38], ["Nasarawa", 8.49, 8.52], ["Niger", 9.93, 5.60],
+      ["Ogun", 7.00, 3.58], ["Ondo", 7.10, 5.08], ["Osun", 7.56, 4.52],
+      ["Oyo", 8.16, 3.61], ["Plateau", 9.22, 9.52], ["Rivers", 4.86, 6.92],
+      ["Sokoto", 13.05, 5.24], ["Taraba", 8.89, 11.36], ["Yobe", 12.00, 11.50],
+      ["Zamfara", 12.17, 6.66]
+    ];
+
+    let map, stateLayer, lgaLayer, selectedStateFeature = null, selectedName = "Nigeria";
+    let statesGeo = null, lgasGeo = null, currentLayer = "states", chart;
+    let usingFallbackMap = false;
+    const importedRows = [];
+
+    const el = (id) => document.getElementById(id);
+    const fmt = new Intl.NumberFormat("en-NG");
+
+    function toElectionRow(row) {
+      const [state, apc, pdp, lp, nnpp, others, valid, turnout] = row;
+      return {
+        state,
+        lga: "",
+        ward: "",
+        parties: { APC: apc, PDP: pdp, LP: lp, NNPP: nnpp, OTHERS: others },
+        valid,
+        turnout,
+        status: "verified-secondary"
+      };
+    }
+
+    function normalizeName(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/\bstates?\b/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    }
+
+    function canonicalState(value) {
+      const raw = String(value || "").trim();
+      const normalized = normalizeName(raw);
+      return stateAliases.get(normalized) || raw.replace(/\s+State$/i, "").trim();
+    }
+
+    function featureName(feature) {
+      const p = feature.properties || {};
+      return p.shapeName || p.ADM1_NAME || p.ADM2_NAME || p.admin1Name || p.admin2Name || p.name || p.NAME_1 || p.NAME_2 || "Unknown";
+    }
+
+    function currentElection() {
+      return elections.find((e) => e.id === el("electionSelect").value) || elections[0];
+    }
+
+    function electionRows() {
+      const selected = currentElection();
+      if (selected.id === "registry-placeholder") return importedRows;
+      return selected.rows.concat(importedRows.filter((r) => r.election_id === selected.id));
+    }
+
+    function rowForState(name) {
+      const key = normalizeName(canonicalState(name));
+      return electionRows().find((row) => normalizeName(canonicalState(row.state)) === key && !row.lga);
+    }
+
+    function rowsForSelectedScope() {
+      const rows = electionRows();
+      if (selectedName === "Nigeria") return rows.filter((r) => !r.lga);
+      const stateKey = normalizeName(canonicalState(selectedName));
+      const lgaRows = rows.filter((r) => normalizeName(canonicalState(r.state)) === stateKey && r.lga);
+      if (lgaRows.length) return lgaRows;
+      const stateRow = rows.find((r) => normalizeName(canonicalState(r.state)) === stateKey && !r.lga);
+      return stateRow ? [stateRow] : [];
+    }
+
+    function winner(row) {
+      if (!row) return { party: "NONE", votes: 0, margin: 0 };
+      const sorted = Object.entries(row.parties).sort((a, b) => b[1] - a[1]);
+      return {
+        party: sorted[0]?.[0] || "NONE",
+        votes: sorted[0]?.[1] || 0,
+        margin: (sorted[0]?.[1] || 0) - (sorted[1]?.[1] || 0)
+      };
+    }
+
+    function colorForFeature(feature) {
+      const metric = el("metricSelect").value;
+      const name = featureName(feature);
+      const row = currentLayer === "states" ? rowForState(name) : null;
+      if (!row) return "#d5ddd2";
+      const win = winner(row);
+      if (metric === "winner") return partyColors[win.party] || partyColors.OTHERS;
+      if (metric === "turnout") return ramp(row.turnout || 0, 0, 45);
+      if (metric === "margin") return ramp(Math.min((win.margin / Math.max(row.valid, 1)) * 100, 60), 0, 35);
+      if (metric === "valid") return ramp(row.valid || 0, 100000, 1700000);
+      return partyColors[win.party] || partyColors.OTHERS;
+    }
+
+    function ramp(value, min, max) {
+      const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+      const stops = [
+        [237, 241, 232],
+        [184, 213, 184],
+        [88, 163, 132],
+        [25, 95, 85]
+      ];
+      const scaled = t * (stops.length - 1);
+      const i = Math.min(stops.length - 2, Math.floor(scaled));
+      const f = scaled - i;
+      const rgb = stops[i].map((v, index) => Math.round(v + (stops[i + 1][index] - v) * f));
+      return `rgb(${rgb.join(",")})`;
+    }
+
+    function styleFeature(feature) {
+      return {
+        color: "#ffffff",
+        weight: currentLayer === "states" ? 1.4 : .8,
+        opacity: 1,
+        fillColor: colorForFeature(feature),
+        fillOpacity: currentLayer === "states" ? .82 : .28
+      };
+    }
+
+    function bindState(feature, layer) {
+      const name = featureName(feature);
+      const row = rowForState(name);
+      const win = winner(row);
+      layer.bindPopup(popupHtml(name, row, win));
+      layer.on({
+        mouseover: (e) => e.target.setStyle({ weight: 3, color: "#111c18" }),
+        mouseout: (e) => stateLayer.resetStyle(e.target),
+        click: () => selectState(feature)
+      });
+    }
+
+    function bindLga(feature, layer) {
+      const name = featureName(feature);
+      layer.bindPopup(`<div class="popup-title">${name}</div><div class="popup-line">LGA boundary</div><div class="popup-line">Import LGA-level results to color this unit.</div>`);
+      layer.on({
+        mouseover: (e) => e.target.setStyle({ weight: 2, color: "#111c18", fillOpacity: .45 }),
+        mouseout: (e) => lgaLayer.resetStyle(e.target)
+      });
+    }
+
+    function popupHtml(name, row, win) {
+      if (!row) {
+        return `<div class="popup-title">${name}</div><div class="popup-line">No result loaded for this election.</div>`;
+      }
+      return `
+        <div class="popup-title">${name}</div>
+        <div class="popup-line">Winner: ${win.party} (${fmt.format(win.votes)} votes)</div>
+        <div class="popup-line">Margin: ${fmt.format(win.margin)} votes</div>
+        <div class="popup-line">Turnout: ${row.turnout}%</div>
+      `;
+    }
+
+    async function loadBoundaries(force = false) {
+      el("dataStatus").textContent = "Loading map";
+      try {
+        if (!statesGeo || force) statesGeo = await fetchJson(stateGeoUrl);
+        if (!lgasGeo || force) lgasGeo = await fetchJson(lgaGeoUrl);
+        usingFallbackMap = false;
+        renderStateLayer();
+        el("dataStatus").textContent = "Map ready";
+      } catch (error) {
+        console.error(error);
+        usingFallbackMap = true;
+        renderFallbackStateLayer();
+        el("dataStatus").textContent = "Fallback map";
+      }
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) throw new Error(`Unable to fetch ${url}`);
+      return response.json();
+    }
+
+    function initMap() {
+      map = L.map("map", { zoomControl: true, attributionControl: true }).setView([9.1, 8.7], 6);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+      map.attributionControl.setPrefix(false);
+      map.attributionControl.addAttribution("Boundaries: geoBoundaries/GRID3");
+    }
+
+    function renderStateLayer() {
+      currentLayer = "states";
+      el("stateLayerBtn").classList.add("active");
+      el("lgaLayerBtn").classList.remove("active");
+      if (lgaLayer) map.removeLayer(lgaLayer);
+      if (stateLayer) map.removeLayer(stateLayer);
+      stateLayer = L.geoJSON(statesGeo, { style: styleFeature, onEachFeature: bindState }).addTo(map);
+      map.fitBounds(stateLayer.getBounds(), { padding: [18, 18] });
+      updateCounts();
+      updateLegend();
+    }
+
+    function renderFallbackStateLayer() {
+      currentLayer = "states";
+      el("stateLayerBtn").classList.add("active");
+      el("lgaLayerBtn").classList.remove("active");
+      if (lgaLayer) map.removeLayer(lgaLayer);
+      if (stateLayer) map.removeLayer(stateLayer);
+      const markers = stateCentroids.map(([name, lat, lng]) => {
+        const row = rowForState(name);
+        const win = winner(row);
+        const marker = L.circleMarker([lat, lng], {
+          radius: 11,
+          color: "#ffffff",
+          weight: 1.5,
+          fillColor: row ? (partyColors[win.party] || partyColors.OTHERS) : "#d5ddd2",
+          fillOpacity: .88
+        }).bindPopup(popupHtml(name, row, win));
+        marker.on("click", () => {
+          selectedStateFeature = null;
+          selectedName = name;
+          el("mapTitle").textContent = selectedName;
+          el("mapSubtitle").textContent = "Centroid fallback selected. Boundary GeoJSON can be reloaded when available.";
+          updateDetails();
+        });
+        marker.bindTooltip(name, { direction: "top", opacity: .9 });
+        return marker;
+      });
+      stateLayer = L.layerGroup(markers).addTo(map);
+      map.setView([9.1, 8.7], 6);
+      updateCounts(stateCentroids.length);
+      updateLegend();
+    }
+
+    function renderLgaLayer() {
+      if (usingFallbackMap) {
+        el("dataStatus").textContent = "LGA boundaries unavailable";
+        return;
+      }
+      if (!lgasGeo) return;
+      currentLayer = "lgas";
+      el("stateLayerBtn").classList.remove("active");
+      el("lgaLayerBtn").classList.add("active");
+      if (stateLayer) stateLayer.setStyle({ fillOpacity: .08, weight: 1, color: "#4b5a53" });
+      if (lgaLayer) map.removeLayer(lgaLayer);
+      const features = selectedStateFeature ? lgasWithinSelectedState() : lgasGeo.features;
+      lgaLayer = L.geoJSON({ type: "FeatureCollection", features }, { style: styleFeature, onEachFeature: bindLga }).addTo(map);
+      if (lgaLayer.getBounds().isValid()) map.fitBounds(lgaLayer.getBounds(), { padding: [18, 18] });
+      updateCounts(features.length);
+      updateLegend();
+    }
+
+    function lgasWithinSelectedState() {
+      if (!selectedStateFeature) return lgasGeo.features;
+      return lgasGeo.features.filter((feature) => {
+        try {
+          return turf.booleanPointInPolygon(turf.centroid(feature), selectedStateFeature);
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    function selectState(feature) {
+      selectedStateFeature = feature;
+      selectedName = canonicalState(featureName(feature));
+      el("mapTitle").textContent = selectedName;
+      el("mapSubtitle").textContent = "State selected. Switch to LGAs to inspect local government boundaries.";
+      updateDetails();
+      if (currentLayer === "lgas") renderLgaLayer();
+    }
+
+    function resetView() {
+      selectedStateFeature = null;
+      selectedName = "Nigeria";
+      el("mapTitle").textContent = "Federal Republic of Nigeria";
+      el("mapSubtitle").textContent = "Click a state to inspect results and drill into LGAs.";
+      if (usingFallbackMap) renderFallbackStateLayer(); else renderStateLayer();
+      updateDetails();
+    }
+
+    function updateCounts(overrideUnits) {
+      const rows = electionRows();
+      const valid = rows.filter((r) => !r.lga).reduce((sum, r) => sum + (r.valid || 0), 0);
+      const totals = rows.reduce((acc, row) => {
+        Object.entries(row.parties || {}).forEach(([party, votes]) => acc[party] = (acc[party] || 0) + votes);
+        return acc;
+      }, {});
+      const leader = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+      el("levelMetric").textContent = currentLayer === "states" ? "State" : "LGA";
+      el("unitMetric").textContent = fmt.format(overrideUnits || (currentLayer === "states" ? 37 : 774));
+      el("votesMetric").textContent = compact(valid);
+      el("leaderMetric").textContent = leader;
+    }
+
+    function updateDetails() {
+      const rows = rowsForSelectedScope();
+      el("detailTitle").textContent = selectedName;
+      el("detailSubtitle").textContent = selectedName === "Nigeria"
+        ? `${currentElection().label}. Click a state for local detail.`
+        : `Loaded result detail for ${selectedName}. LGA-level figures appear when imported.`;
+      renderChart(rows);
+      renderTable(rows);
+      if (stateLayer) stateLayer.setStyle(styleFeature);
+      updateCounts();
+    }
+
+    function renderChart(rows) {
+      const totals = { APC: 0, PDP: 0, LP: 0, NNPP: 0, OTHERS: 0 };
+      rows.forEach((row) => Object.keys(totals).forEach((party) => totals[party] += Number(row.parties?.[party] || 0)));
+      const labels = Object.keys(totals);
+      const data = labels.map((label) => totals[label]);
+      if (chart) chart.destroy();
+      chart = new Chart(el("resultChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: labels.map((label) => partyColors[label]),
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmt.format(ctx.parsed.y)}` } }
+          },
+          scales: {
+            x: { grid: { display: false } },
+            y: { ticks: { callback: (value) => compact(value) } }
+          }
+        }
+      });
+    }
+
+    function renderTable(rows) {
+      const body = el("resultRows");
+      const sorted = rows.slice().sort((a, b) => {
+        if (selectedName === "Nigeria") return winner(b).votes - winner(a).votes;
+        return String(a.lga || a.state).localeCompare(String(b.lga || b.state));
+      });
+      body.innerHTML = sorted.map((row) => {
+        const win = winner(row);
+        return `
+          <tr>
+            <td>${row.lga || row.state}</td>
+            <td><span class="swatch" style="display:inline-block;background:${partyColors[win.party] || partyColors.OTHERS}"></span> ${win.party}</td>
+            <td class="num">${fmt.format(row.parties.APC || 0)}</td>
+            <td class="num">${fmt.format(row.parties.PDP || 0)}</td>
+            <td class="num">${fmt.format(row.parties.LP || 0)}</td>
+            <td class="num">${fmt.format(row.parties.NNPP || 0)}</td>
+            <td class="num">${fmt.format(row.parties.OTHERS || 0)}</td>
+            <td class="num">${row.turnout ? row.turnout + "%" : ""}</td>
+          </tr>
+        `;
+      }).join("") || `<tr><td colspan="8">No rows loaded for this scope. Import a verified CSV to populate it.</td></tr>`;
+    }
+
+    function updateLegend() {
+      const metric = el("metricSelect").value;
+      if (metric === "winner") {
+        el("legend").innerHTML = ["APC", "PDP", "LP", "NNPP", "OTHERS"].map((party) =>
+          `<div class="legend-row"><span class="swatch" style="background:${partyColors[party]}"></span>${party}</div>`
+        ).join("");
+        return;
+      }
+      el("legend").innerHTML = `
+        <div class="legend-row"><span class="swatch" style="background:${ramp(0, 0, 1)}"></span>Lower</div>
+        <div class="legend-row"><span class="swatch" style="background:${ramp(.5, 0, 1)}"></span>Middle</div>
+        <div class="legend-row"><span class="swatch" style="background:${ramp(1, 0, 1)}"></span>Higher</div>
+      `;
+    }
+
+    function compact(value) {
+      const number = Number(value || 0);
+      if (number >= 1000000) return `${(number / 1000000).toFixed(1)}m`;
+      if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
+      return fmt.format(number);
+    }
+
+    function setupControls() {
+      el("electionSelect").innerHTML = elections.map((e) => `<option value="${e.id}">${e.label}</option>`).join("");
+      el("electionSelect").addEventListener("change", () => {
+        updateDetails();
+        if (currentLayer === "states") renderStateLayer(); else renderLgaLayer();
+      });
+      el("metricSelect").addEventListener("change", () => {
+        if (currentLayer === "states") renderStateLayer(); else renderLgaLayer();
+        updateDetails();
+      });
+      el("stateLayerBtn").addEventListener("click", renderStateLayer);
+      el("lgaLayerBtn").addEventListener("click", renderLgaLayer);
+      el("resetBtn").addEventListener("click", resetView);
+      el("syncBtn").addEventListener("click", () => loadBoundaries(true));
+      el("templateBtn").addEventListener("click", downloadTemplate);
+      el("csvInput").addEventListener("change", importCsv);
+      el("searchBox").addEventListener("change", runSearch);
+      el("searchBox").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") runSearch();
+      });
+    }
+
+    function runSearch() {
+      const term = normalizeName(el("searchBox").value);
+      if (!term) return;
+      const stateFeature = statesGeo?.features.find((f) => normalizeName(featureName(f)).includes(term));
+      if (stateFeature) {
+        selectState(stateFeature);
+        if (stateLayer) {
+          const bounds = L.geoJSON(stateFeature).getBounds();
+          map.fitBounds(bounds, { padding: [30, 30] });
+        }
+        return;
+      }
+      const centroid = stateCentroids.find(([name]) => normalizeName(name).includes(term));
+      if (centroid) {
+        const [name, lat, lng] = centroid;
+        selectedName = name;
+        selectedStateFeature = null;
+        el("mapTitle").textContent = selectedName;
+        el("mapSubtitle").textContent = "Centroid fallback selected.";
+        map.setView([lat, lng], 7);
+        updateDetails();
+        return;
+      }
+      const lgaFeature = lgasGeo?.features.find((f) => normalizeName(featureName(f)).includes(term));
+      if (lgaFeature) {
+        renderLgaLayer();
+        map.fitBounds(L.geoJSON(lgaFeature).getBounds(), { padding: [30, 30] });
+      }
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], value = "", inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i], next = text[i + 1];
+        if (char === '"' && inQuotes && next === '"') { value += '"'; i++; continue; }
+        if (char === '"') { inQuotes = !inQuotes; continue; }
+        if (char === "," && !inQuotes) { row.push(value); value = ""; continue; }
+        if ((char === "\n" || char === "\r") && !inQuotes) {
+          if (char === "\r" && next === "\n") i++;
+          row.push(value); rows.push(row); row = []; value = ""; continue;
+        }
+        value += char;
+      }
+      if (value || row.length) { row.push(value); rows.push(row); }
+      return rows.filter((r) => r.some((cell) => String(cell).trim()));
+    }
+
+    function importCsv(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const records = parseCsv(String(reader.result || ""));
+        const headers = records.shift().map((h) => normalizeName(h).replace(/\s+/g, "_"));
+        const grouped = new Map();
+        records.forEach((record) => {
+          const item = Object.fromEntries(headers.map((h, index) => [h, record[index] || ""]));
+          const key = [item.election_id || "imported", canonicalState(item.state), item.lga || "", item.ward || ""].join("::");
+          if (!grouped.has(key)) {
+            grouped.set(key, {
+              election_id: item.election_id || "imported",
+              state: canonicalState(item.state),
+              lga: item.lga || "",
+              ward: item.ward || "",
+              parties: { APC: 0, PDP: 0, LP: 0, NNPP: 0, OTHERS: 0 },
+              valid: 0,
+              registered: Number(item.registered || 0),
+              turnout: Number(item.turnout || 0),
+              source_url: item.source_url || "",
+              status: item.result_status || "imported"
+            });
+          }
+          const row = grouped.get(key);
+          const party = String(item.party || "OTHERS").toUpperCase();
+          const target = row.parties[party] === undefined ? "OTHERS" : party;
+          const votes = Number(String(item.votes || "0").replace(/,/g, ""));
+          row.parties[target] += votes;
+          row.valid += votes;
+        });
+        importedRows.splice(0, importedRows.length, ...Array.from(grouped.values()));
+        el("dataStatus").textContent = `${importedRows.length} imported units`;
+        updateDetails();
+        if (currentLayer === "states") renderStateLayer(); else renderLgaLayer();
+      };
+      reader.readAsText(file);
+    }
+
+    function downloadTemplate() {
+      const csv = [
+        "election_id,year,type,office,state,lga,ward,candidate,party,votes,registered,turnout,source_url,result_status",
+        "2024-edo-governor-lga,2024,off-cycle,Governor,Edo,Oredo,,Candidate Name,APC,0,0,0,https://example.com,verified"
+      ].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "nigeria-election-results-template.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    setupControls();
+    initMap();
+    updateDetails();
+    loadBoundaries();
+  </script>
+</body>
+</html>
