@@ -7,6 +7,7 @@ Interactive static dashboard for exploring Nigerian election results by state an
 - Real Nigeria state and LGA boundary layers from geoBoundaries/GRID3.
 - OpenStreetMap basemap.
 - 2023 Nigerian presidential state-level result dataset.
+- Uploaded historical presidential and gubernatorial CSV datasets from 1999 through 2022.
 - Search, state drill-down, map metrics, party winner coloring, chart, table, and CSV import workflow.
 
 ## Data Model

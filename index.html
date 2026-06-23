@@ -514,7 +514,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr>
+            <tr id="resultHeaderRow">
               <th>Jurisdiction</th>
               <th>Winner</th>
               <th class="num">APC</th>
@@ -531,6 +531,7 @@
     </section>
   </div>
 
+  <script src="assets/historical-elections.js"></script>
   <script>
     const stateGeoUrl = "assets/nigeria-states.geojson";
     const lgaGeoUrl = "assets/nigeria-lgas.geojson";
@@ -540,9 +541,19 @@
       PDP: "#2ca25f",
       LP: "#c83e4d",
       NNPP: "#d9a227",
+      AD: "#7c55c7",
+      APP: "#1e9c89",
+      "AD-APP": "#7c55c7",
+      ANPP: "#e0703d",
+      AC: "#4f97a8",
+      ACN: "#5b8def",
+      CPC: "#b6518f",
+      APGA: "#2f9f64",
       OTHERS: "#6f7280",
+      "__REST": "#6f7280",
       NONE: "#c7cec6"
     };
+    const fallbackPartyColors = ["#2f7dd1", "#2ca25f", "#c83e4d", "#d9a227", "#7c55c7", "#1e9c89", "#e0703d", "#4f97a8", "#b6518f", "#6f7280"];
 
     const elections = [
       {
@@ -605,7 +616,7 @@
         source: "Awaiting official/state/LGA CSV imports",
         rows: []
       }
-    ];
+    ].concat(window.historicalElectionDatasets || []);
 
     const stateAliases = new Map([
       ["fct", "Federal Capital Territory"],
@@ -705,17 +716,57 @@
       };
     }
 
+    function getPartyColor(party) {
+      if (partyColors[party]) return partyColors[party];
+      let hash = 0;
+      String(party || "").split("").forEach((char) => hash = ((hash << 5) - hash) + char.charCodeAt(0));
+      return fallbackPartyColors[Math.abs(hash) % fallbackPartyColors.length];
+    }
+
+    function partyTotals(rows) {
+      return rows.reduce((totals, row) => {
+        Object.entries(row.parties || {}).forEach(([party, votes]) => {
+          totals[party] = (totals[party] || 0) + Number(votes || 0);
+        });
+        return totals;
+      }, {});
+    }
+
+    function displayParties(rows, max = 6) {
+      const sorted = Object.entries(partyTotals(rows))
+        .filter(([, votes]) => votes > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([party]) => party);
+      const visible = sorted.slice(0, max);
+      if (sorted.length > max) visible.push("__REST");
+      return visible;
+    }
+
+    function partyLabel(party) {
+      if (party === "__REST") return "Other listed";
+      if (party === "OTHERS") return "Others";
+      return party;
+    }
+
+    function partyValue(row, party, visibleParties) {
+      if (party !== "__REST") return Number(row.parties?.[party] || 0);
+      const visible = new Set(visibleParties.filter((key) => key !== "__REST"));
+      return Object.entries(row.parties || {}).reduce((sum, [key, value]) => {
+        return visible.has(key) ? sum : sum + Number(value || 0);
+      }, 0);
+    }
+
     function colorForFeature(feature) {
       const metric = el("metricSelect").value;
       const name = featureName(feature);
       const row = currentLayer === "states" ? rowForState(name) : null;
       if (!row) return "#d5ddd2";
       const win = winner(row);
-      if (metric === "winner") return partyColors[win.party] || partyColors.OTHERS;
+      if (metric === "winner") return getPartyColor(win.party);
       if (metric === "turnout") return ramp(row.turnout || 0, 0, 45);
       if (metric === "margin") return ramp(Math.min((win.margin / Math.max(row.valid, 1)) * 100, 60), 0, 35);
       if (metric === "valid") return ramp(row.valid || 0, 100000, 1700000);
-      return partyColors[win.party] || partyColors.OTHERS;
+      return getPartyColor(win.party);
     }
 
     function ramp(value, min, max) {
@@ -833,7 +884,7 @@
           radius: 11,
           color: "#ffffff",
           weight: 1.5,
-          fillColor: row ? (partyColors[win.party] || partyColors.OTHERS) : "#d5ddd2",
+          fillColor: row ? getPartyColor(win.party) : "#d5ddd2",
           fillOpacity: .88
         }).bindPopup(popupHtml(name, row, win));
         marker.on("click", () => {
@@ -902,10 +953,7 @@
     function updateCounts(overrideUnits) {
       const rows = electionRows();
       const valid = rows.filter((r) => !r.lga).reduce((sum, r) => sum + (r.valid || 0), 0);
-      const totals = rows.reduce((acc, row) => {
-        Object.entries(row.parties || {}).forEach(([party, votes]) => acc[party] = (acc[party] || 0) + votes);
-        return acc;
-      }, {});
+      const totals = partyTotals(rows);
       const leader = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
       el("levelMetric").textContent = currentLayer === "states" ? "State" : "LGA";
       el("unitMetric").textContent = fmt.format(overrideUnits || (currentLayer === "states" ? 37 : 774));
@@ -926,10 +974,9 @@
     }
 
     function renderChart(rows) {
-      const totals = { APC: 0, PDP: 0, LP: 0, NNPP: 0, OTHERS: 0 };
-      rows.forEach((row) => Object.keys(totals).forEach((party) => totals[party] += Number(row.parties?.[party] || 0)));
-      const labels = Object.keys(totals);
-      const data = labels.map((label) => totals[label]);
+      const visibleParties = displayParties(rows, 8);
+      const labels = visibleParties.map(partyLabel);
+      const data = visibleParties.map((party) => rows.reduce((sum, row) => sum + partyValue(row, party, visibleParties), 0));
       if (chart) chart.destroy();
       chart = new Chart(el("resultChart"), {
         type: "bar",
@@ -937,7 +984,7 @@
           labels,
           datasets: [{
             data,
-            backgroundColor: labels.map((label) => partyColors[label]),
+            backgroundColor: visibleParties.map(getPartyColor),
             borderRadius: 4
           }]
         },
@@ -958,6 +1005,13 @@
 
     function renderTable(rows) {
       const body = el("resultRows");
+      const visibleParties = displayParties(rows, 6);
+      el("resultHeaderRow").innerHTML = `
+        <th>Jurisdiction</th>
+        <th>Winner</th>
+        ${visibleParties.map((party) => `<th class="num">${partyLabel(party)}</th>`).join("")}
+        <th class="num">Turnout</th>
+      `;
       const sorted = rows.slice().sort((a, b) => {
         if (selectedName === "Nigeria") return winner(b).votes - winner(a).votes;
         return String(a.lga || a.state).localeCompare(String(b.lga || b.state));
@@ -967,23 +1021,19 @@
         return `
           <tr>
             <td>${row.lga || row.state}</td>
-            <td><span class="swatch" style="display:inline-block;background:${partyColors[win.party] || partyColors.OTHERS}"></span> ${win.party}</td>
-            <td class="num">${fmt.format(row.parties.APC || 0)}</td>
-            <td class="num">${fmt.format(row.parties.PDP || 0)}</td>
-            <td class="num">${fmt.format(row.parties.LP || 0)}</td>
-            <td class="num">${fmt.format(row.parties.NNPP || 0)}</td>
-            <td class="num">${fmt.format(row.parties.OTHERS || 0)}</td>
+            <td><span class="swatch" style="display:inline-block;background:${getPartyColor(win.party)}"></span> ${win.party}</td>
+            ${visibleParties.map((party) => `<td class="num">${fmt.format(partyValue(row, party, visibleParties))}</td>`).join("")}
             <td class="num">${row.turnout ? row.turnout + "%" : ""}</td>
           </tr>
         `;
-      }).join("") || `<tr><td colspan="8">No rows loaded for this scope. Import a verified CSV to populate it.</td></tr>`;
+      }).join("") || `<tr><td colspan="${visibleParties.length + 3}">No rows loaded for this scope. Import a verified CSV to populate it.</td></tr>`;
     }
 
     function updateLegend() {
       const metric = el("metricSelect").value;
       if (metric === "winner") {
-        el("legend").innerHTML = ["APC", "PDP", "LP", "NNPP", "OTHERS"].map((party) =>
-          `<div class="legend-row"><span class="swatch" style="background:${partyColors[party]}"></span>${party}</div>`
+        el("legend").innerHTML = displayParties(electionRows(), 6).map((party) =>
+          `<div class="legend-row"><span class="swatch" style="background:${getPartyColor(party)}"></span>${partyLabel(party)}</div>`
         ).join("");
         return;
       }
@@ -1088,7 +1138,7 @@
               state: canonicalState(item.state),
               lga: item.lga || "",
               ward: item.ward || "",
-              parties: { APC: 0, PDP: 0, LP: 0, NNPP: 0, OTHERS: 0 },
+              parties: {},
               valid: 0,
               registered: Number(item.registered || 0),
               turnout: Number(item.turnout || 0),
@@ -1097,9 +1147,10 @@
             });
           }
           const row = grouped.get(key);
-          const party = String(item.party || "OTHERS").toUpperCase();
-          const target = row.parties[party] === undefined ? "OTHERS" : party;
+          const party = String(item.party || "OTHERS").trim().replace(/^\((.*)\)$/, "$1").toUpperCase().replace(/\s+/g, "");
+          const target = party || "OTHERS";
           const votes = Number(String(item.votes || "0").replace(/,/g, ""));
+          if (row.parties[target] === undefined) row.parties[target] = 0;
           row.parties[target] += votes;
           row.valid += votes;
         });
