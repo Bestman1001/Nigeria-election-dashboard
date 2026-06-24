@@ -347,6 +347,41 @@
       color: #155f55;
     }
 
+    .party-mark {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-grid;
+      place-items: center;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1;
+      border: 2px solid rgba(255,255,255,.85);
+      box-shadow: 0 3px 9px rgba(22, 32, 29, .16);
+      flex: 0 0 auto;
+    }
+
+    .party-mark::before {
+      content: attr(data-initials);
+    }
+
+    .party-chip, .winner-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .party-chip {
+      font-size: 12px;
+      color: var(--ink);
+    }
+
+    .winner-cell {
+      font-weight: 700;
+    }
+
     .hint {
       font-size: 12px;
       color: var(--muted);
@@ -360,6 +395,67 @@
       display: grid;
       gap: 9px;
       background: #fbfcf8;
+    }
+
+    .live-panel {
+      border: 1px solid #cfe0d8;
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 10px;
+      background: linear-gradient(180deg, #f4fbf8 0%, #ffffff 100%);
+    }
+
+    .live-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .live-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #9aa6a0;
+      box-shadow: 0 0 0 3px rgba(154, 166, 160, .14);
+    }
+
+    .live-dot.on {
+      background: #1f9d72;
+      box-shadow: 0 0 0 4px rgba(31, 157, 114, .16);
+    }
+
+    .live-controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .live-controls input {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    .live-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .live-meta b {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      margin-top: 2px;
     }
 
     .leaflet-container {
@@ -472,6 +568,22 @@
         <div class="metric"><span>Current leader</span><b id="leaderMetric">APC</b></div>
       </div>
 
+      <div class="live-panel">
+        <div class="live-title">
+          <span class="party-chip"><span id="liveDot" class="live-dot"></span> Trusted live feed</span>
+          <button class="tool-btn" id="liveToggleBtn" type="button">Connect</button>
+        </div>
+        <div class="live-controls">
+          <input id="liveEndpointInput" type="url" placeholder="assets/live-results.json or trusted API URL" />
+          <button class="tool-btn" id="liveRefreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="live-meta">
+          <span>Feed status <b id="liveStatus">Offline</b></span>
+          <span>Last update <b id="liveUpdated">Never</b></span>
+        </div>
+        <div class="hint">Live mode accepts signed or trusted JSON feeds from ERAD, a verified backend, Google Sheets middleware, Supabase, Firebase, or another election-data API.</div>
+      </div>
+
       <div class="upload-panel">
         <label for="csvInput">Add verified result CSV</label>
         <input class="file-input" id="csvInput" type="file" accept=".csv,text/csv" />
@@ -485,6 +597,7 @@
         <a href="https://www.geoboundaries.org/api/current/gbOpen/NGA/ADM2/" target="_blank" rel="noreferrer">geoBoundaries Nigeria ADM2 LGAs</a>
         <a href="https://en.wikipedia.org/wiki/2023_Nigerian_presidential_election" target="_blank" rel="noreferrer">2023 presidential state table</a>
         <a href="https://www.inecelectionresults.ng/" target="_blank" rel="noreferrer">INEC Result Viewing Portal</a>
+        <a href="https://erad.ng/" target="_blank" rel="noreferrer">ERAD Election Result Analysis Dashboard</a>
       </div>
     </aside>
 
@@ -535,6 +648,7 @@
   <script>
     const stateGeoUrl = "assets/nigeria-states.geojson";
     const lgaGeoUrl = "assets/nigeria-lgas.geojson";
+    const liveConfigUrl = "assets/live-config.json";
 
     const partyColors = {
       APC: "#2f7dd1",
@@ -555,7 +669,7 @@
     };
     const fallbackPartyColors = ["#2f7dd1", "#2ca25f", "#c83e4d", "#d9a227", "#7c55c7", "#1e9c89", "#e0703d", "#4f97a8", "#b6518f", "#6f7280"];
 
-    const elections = [
+    let elections = [
       {
         id: "2023-presidential-state",
         year: 2023,
@@ -644,6 +758,8 @@
     let map, stateLayer, lgaLayer, selectedStateFeature = null, selectedName = "Nigeria";
     let statesGeo = null, lgasGeo = null, currentLayer = "states", chart;
     let usingFallbackMap = false;
+    let liveTimer = null;
+    let liveConfig = { endpoint: "assets/live-results.json", intervalSeconds: 30, enabled: false };
     const importedRows = [];
 
     const el = (id) => document.getElementById(id);
@@ -748,6 +864,21 @@
       return party;
     }
 
+    function partyInitials(party) {
+      const label = partyLabel(party);
+      if (label.length <= 5) return label;
+      return label.split(/[^A-Za-z0-9]+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 4).toUpperCase() || label.slice(0, 4).toUpperCase();
+    }
+
+    function partyMark(party, extraClass = "") {
+      const label = partyLabel(party);
+      return `<span class="party-mark ${extraClass}" title="${label}" aria-hidden="true" data-initials="${partyInitials(party)}" style="background:${getPartyColor(party)}"></span>`;
+    }
+
+    function partyChip(party) {
+      return `<span class="party-chip">${partyMark(party)}<span>${partyLabel(party)}</span></span>`;
+    }
+
     function partyValue(row, party, visibleParties) {
       if (party !== "__REST") return Number(row.parties?.[party] || 0);
       const visible = new Set(visibleParties.filter((key) => key !== "__REST"));
@@ -821,7 +952,7 @@
       }
       return `
         <div class="popup-title">${name}</div>
-        <div class="popup-line">Winner: ${win.party} (${fmt.format(win.votes)} votes)</div>
+        <div class="popup-line">Winner: ${partyMark(win.party)} ${win.party} (${fmt.format(win.votes)} votes)</div>
         <div class="popup-line">Margin: ${fmt.format(win.margin)} votes</div>
         <div class="popup-line">Turnout: ${row.turnout}%</div>
       `;
@@ -958,7 +1089,7 @@
       el("levelMetric").textContent = currentLayer === "states" ? "State" : "LGA";
       el("unitMetric").textContent = fmt.format(overrideUnits || (currentLayer === "states" ? 37 : 774));
       el("votesMetric").textContent = compact(valid);
-      el("leaderMetric").textContent = leader;
+      el("leaderMetric").innerHTML = partyChip(leader);
     }
 
     function updateDetails() {
@@ -1009,7 +1140,7 @@
       el("resultHeaderRow").innerHTML = `
         <th>Jurisdiction</th>
         <th>Winner</th>
-        ${visibleParties.map((party) => `<th class="num">${partyLabel(party)}</th>`).join("")}
+        ${visibleParties.map((party) => `<th class="num">${partyChip(party)}</th>`).join("")}
         <th class="num">Turnout</th>
       `;
       const sorted = rows.slice().sort((a, b) => {
@@ -1021,7 +1152,7 @@
         return `
           <tr>
             <td>${row.lga || row.state}</td>
-            <td><span class="swatch" style="display:inline-block;background:${getPartyColor(win.party)}"></span> ${win.party}</td>
+            <td><span class="winner-cell">${partyMark(win.party)}<span>${win.party}</span></span></td>
             ${visibleParties.map((party) => `<td class="num">${fmt.format(partyValue(row, party, visibleParties))}</td>`).join("")}
             <td class="num">${row.turnout ? row.turnout + "%" : ""}</td>
           </tr>
@@ -1033,7 +1164,7 @@
       const metric = el("metricSelect").value;
       if (metric === "winner") {
         el("legend").innerHTML = displayParties(electionRows(), 6).map((party) =>
-          `<div class="legend-row"><span class="swatch" style="background:${getPartyColor(party)}"></span>${partyLabel(party)}</div>`
+          `<div class="legend-row">${partyMark(party)}${partyLabel(party)}</div>`
         ).join("");
         return;
       }
@@ -1051,8 +1182,123 @@
       return fmt.format(number);
     }
 
-    function setupControls() {
+    function renderElectionOptions(preserveValue = el("electionSelect")?.value) {
       el("electionSelect").innerHTML = elections.map((e) => `<option value="${e.id}">${e.label}</option>`).join("");
+      if (preserveValue && elections.some((e) => e.id === preserveValue)) {
+        el("electionSelect").value = preserveValue;
+      }
+    }
+
+    function setLiveStatus(status, detail = "") {
+      el("liveStatus").textContent = status;
+      if (detail) el("liveUpdated").textContent = detail;
+      el("liveDot").classList.toggle("on", status === "Connected" || status === "Live");
+      el("liveToggleBtn").textContent = liveTimer ? "Disconnect" : "Connect";
+    }
+
+    async function setupLiveConfig() {
+      try {
+        const response = await fetch(`${liveConfigUrl}?v=${Date.now()}`, { cache: "no-store" });
+        if (response.ok) liveConfig = { ...liveConfig, ...(await response.json()) };
+      } catch {
+        liveConfig = { ...liveConfig };
+      }
+      const params = new URLSearchParams(window.location.search);
+      const queryEndpoint = params.get("liveApi");
+      const savedEndpoint = localStorage.getItem("electionDashboard.liveEndpoint");
+      const endpoint = queryEndpoint || savedEndpoint || liveConfig.endpoint || "assets/live-results.json";
+      el("liveEndpointInput").value = endpoint;
+      setLiveStatus("Offline", "Never");
+      if (liveConfig.enabled || queryEndpoint) startLiveFeed();
+    }
+
+    function normalizeLiveDataset(dataset, fallbackMeta = {}) {
+      if (!dataset) return null;
+      const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+      return {
+        id: dataset.id || fallbackMeta.id || "live-election-feed",
+        year: dataset.year || fallbackMeta.year || "Live",
+        type: dataset.type || fallbackMeta.type || "live",
+        office: dataset.office || fallbackMeta.office || "Election",
+        label: dataset.label || fallbackMeta.label || "Live election results",
+        granularity: dataset.granularity || fallbackMeta.granularity || "state",
+        status: dataset.status || "live",
+        source: dataset.source || fallbackMeta.source || "Trusted live feed",
+        updatedAt: dataset.updatedAt || fallbackMeta.updatedAt || "",
+        rows: rows.map((row) => ({
+          state: canonicalState(row.state || row.jurisdiction || "Nigeria"),
+          lga: row.lga || "",
+          ward: row.ward || "",
+          parties: row.parties || {},
+          valid: Number(row.valid || row.totalVotes || row.totalvotes || 0),
+          registered: Number(row.registered || row.registeredVoters || 0),
+          turnout: Number(row.turnout || 0),
+          status: row.status || dataset.status || "live",
+          source_url: row.source_url || row.sourceUrl || dataset.sourceUrl || ""
+        }))
+      };
+    }
+
+    function datasetsFromLivePayload(payload) {
+      if (!payload) return [];
+      if (Array.isArray(payload.datasets)) return payload.datasets.map((dataset) => normalizeLiveDataset(dataset, payload)).filter(Boolean);
+      if (payload.election) return [normalizeLiveDataset({ ...payload.election, rows: payload.rows || payload.election.rows }, payload)].filter(Boolean);
+      if (payload.dataset) return [normalizeLiveDataset(payload.dataset, payload)].filter(Boolean);
+      if (Array.isArray(payload.rows)) return [normalizeLiveDataset(payload, payload)].filter(Boolean);
+      return [];
+    }
+
+    function mergeLiveDatasets(datasets) {
+      if (!datasets.length) return 0;
+      datasets.forEach((dataset) => {
+        const index = elections.findIndex((item) => item.id === dataset.id);
+        if (index >= 0) elections[index] = dataset;
+        else elections.unshift(dataset);
+      });
+      renderElectionOptions();
+      updateDetails();
+      if (currentLayer === "states") renderStateLayer(); else renderLgaLayer();
+      return datasets.length;
+    }
+
+    async function refreshLiveFeed() {
+      const endpoint = el("liveEndpointInput").value.trim() || liveConfig.endpoint;
+      if (!endpoint) {
+        setLiveStatus("Missing endpoint");
+        return;
+      }
+      localStorage.setItem("electionDashboard.liveEndpoint", endpoint);
+      setLiveStatus("Connecting");
+      try {
+        const separator = endpoint.includes("?") ? "&" : "?";
+        const response = await fetch(`${endpoint}${separator}t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const count = mergeLiveDatasets(datasetsFromLivePayload(payload));
+        const updated = payload.updatedAt || payload.generatedAt || new Date().toISOString();
+        const label = new Date(updated).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+        setLiveStatus(count ? "Live" : "Connected", label);
+      } catch (error) {
+        console.error(error);
+        setLiveStatus("Feed error", "Check endpoint/CORS");
+      }
+    }
+
+    function startLiveFeed() {
+      if (liveTimer) {
+        clearInterval(liveTimer);
+        liveTimer = null;
+        setLiveStatus("Offline");
+        return;
+      }
+      refreshLiveFeed();
+      const interval = Math.max(10, Number(liveConfig.intervalSeconds || 30)) * 1000;
+      liveTimer = setInterval(refreshLiveFeed, interval);
+      el("liveToggleBtn").textContent = "Disconnect";
+    }
+
+    function setupControls() {
+      renderElectionOptions();
       el("electionSelect").addEventListener("change", () => {
         updateDetails();
         if (currentLayer === "states") renderStateLayer(); else renderLgaLayer();
@@ -1065,6 +1311,8 @@
       el("lgaLayerBtn").addEventListener("click", renderLgaLayer);
       el("resetBtn").addEventListener("click", resetView);
       el("syncBtn").addEventListener("click", () => loadBoundaries(true));
+      el("liveToggleBtn").addEventListener("click", startLiveFeed);
+      el("liveRefreshBtn").addEventListener("click", refreshLiveFeed);
       el("templateBtn").addEventListener("click", downloadTemplate);
       el("csvInput").addEventListener("change", importCsv);
       el("searchBox").addEventListener("change", runSearch);
@@ -1180,6 +1428,7 @@
     initMap();
     updateDetails();
     loadBoundaries();
+    setupLiveConfig();
   </script>
 </body>
 </html>

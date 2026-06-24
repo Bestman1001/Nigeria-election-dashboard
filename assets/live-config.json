@@ -1,0 +1,18 @@
+{
+  "enabled": false,
+  "endpoint": "assets/live-results.json",
+  "intervalSeconds": 30,
+  "trustedSources": [
+    {
+      "name": "ERAD",
+      "url": "https://erad.ng/",
+      "status": "candidate"
+    },
+    {
+      "name": "INEC Result Viewing Portal",
+      "url": "https://www.inecelectionresults.ng/",
+      "status": "reference"
+    }
+  ],
+  "notes": "Set enabled to true or pass ?liveApi=https://trusted-source.example/results.json to start live polling automatically."
+}
