@@ -1,8 +1,12 @@
 # Party Logos
 
-This folder is reserved for official party logo files.
+This folder contains current registered-party logo files sourced from INEC's official list of political parties:
 
-Use uppercase party codes as filenames, for example:
+```text
+https://inecnigeria.org/list-of-political-parties/
+```
+
+Files use uppercase party codes as filenames, for example:
 
 - `APC.svg`
 - `PDP.svg`
@@ -10,4 +14,4 @@ Use uppercase party codes as filenames, for example:
 - `NNPP.svg`
 - `APGA.svg`
 
-The dashboard currently renders generated party badge marks so it can stay legally clean and work without external assets. Official logos can be added here once their usage rights and source are confirmed.
+`party-logos.js` maps party codes to local files and original INEC source URLs. The dashboard falls back to generated badge marks when no logo is available.

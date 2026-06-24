@@ -360,10 +360,27 @@
       border: 2px solid rgba(255,255,255,.85);
       box-shadow: 0 3px 9px rgba(22, 32, 29, .16);
       flex: 0 0 auto;
+      overflow: hidden;
     }
 
     .party-mark::before {
       content: attr(data-initials);
+    }
+
+    .party-mark.has-logo {
+      background: #fff !important;
+    }
+
+    .party-mark.has-logo::before {
+      content: "";
+    }
+
+    .party-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      border-radius: 50%;
     }
 
     .party-chip, .winner-cell {
@@ -645,6 +662,7 @@
   </div>
 
   <script src="assets/historical-elections.js"></script>
+  <script src="assets/party-logos/party-logos.js"></script>
   <script>
     const stateGeoUrl = "assets/nigeria-states.geojson";
     const lgaGeoUrl = "assets/nigeria-lgas.geojson";
@@ -872,6 +890,10 @@
 
     function partyMark(party, extraClass = "") {
       const label = partyLabel(party);
+      const logo = window.partyLogoManifest?.[party];
+      if (logo?.file) {
+        return `<span class="party-mark has-logo ${extraClass}" title="${label}" aria-hidden="true"><img src="${logo.file}" alt="" loading="lazy" onerror="this.parentElement.classList.remove('has-logo'); this.remove();"></span>`;
+      }
       return `<span class="party-mark ${extraClass}" title="${label}" aria-hidden="true" data-initials="${partyInitials(party)}" style="background:${getPartyColor(party)}"></span>`;
     }
 

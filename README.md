@@ -8,7 +8,7 @@ Interactive static dashboard for exploring Nigerian election results by state an
 - OpenStreetMap basemap.
 - 2023 Nigerian presidential state-level result dataset.
 - Uploaded historical presidential and gubernatorial CSV datasets from 1999 through 2022.
-- Search, state drill-down, map metrics, party winner coloring, party badge marks, chart, table, and CSV import workflow.
+- Search, state drill-down, map metrics, party winner coloring, INEC party logos, chart, table, and CSV import workflow.
 - Live-feed controls for trusted JSON/API result sources.
 
 ## Data Model
@@ -65,7 +65,13 @@ Candidate trusted sources include ERAD, a verified election-observer backend, Su
 
 ## Party Logos
 
-The dashboard currently renders generated party badge marks. Official party logos can be added later in `assets/party-logos/` using uppercase party-code filenames such as `APC.svg`, `PDP.svg`, `LP.svg`, and `NNPP.svg` after usage rights and sources are confirmed.
+Current registered-party logos are sourced from INEC's official political parties page:
+
+```text
+https://inecnigeria.org/list-of-political-parties/
+```
+
+The dashboard loads `assets/party-logos/party-logos.js` and uses real logo images when a party code is available. It falls back to generated badge marks for older or defunct parties that are not in the current INEC list.
 
 ## Sources
 
