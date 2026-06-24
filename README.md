@@ -23,7 +23,21 @@ Rows are grouped by election, state, LGA, and ward. Party votes are aggregated i
 
 ## Live API
 
-GitHub Pages is static hosting, so live mode works by polling a trusted JSON endpoint every 30 seconds by default. Configure it in `assets/live-config.json`, enter an endpoint in the dashboard, or use a URL parameter:
+GitHub Pages is static hosting, so live mode uses two layers:
+
+1. A GitHub Actions mirror job copies a trusted external API into `assets/live-results.json`.
+2. The dashboard polls `assets/live-results.json` every 30 seconds by default.
+
+This keeps the public site fast, avoids browser CORS issues, and creates an auditable commit history for election-night data changes.
+
+To enable production live mode, add one of these repository settings:
+
+- Repository variable: `LIVE_RESULTS_URL`
+- Repository secret: `LIVE_RESULTS_URL`
+
+Then run **Actions -> Sync trusted live feed** manually, or let the scheduled workflow run every 15 minutes. For faster election-night operations, the workflow can be triggered manually after a verified source update.
+
+You can still enter an endpoint in the dashboard directly, or use a URL parameter:
 
 ```text
 https://bestman1001.github.io/Nigeria-election-dashboard/?liveApi=https://example.org/results.json
@@ -62,6 +76,15 @@ Expected payload:
 ```
 
 Candidate trusted sources include ERAD, a verified election-observer backend, Supabase, Firebase, Google Sheets middleware, or another API that can provide signed or reviewed JSON.
+
+## Automated Maintenance
+
+The repository includes:
+
+- `.github/workflows/sync-live-feed.yml`: mirrors a trusted live JSON endpoint into `assets/live-results.json`.
+- `.github/workflows/sync-party-logos.yml`: refreshes current INEC party logos weekly and can be run manually.
+- `scripts/sync-live-feed.mjs`: validates live result JSON before writing it.
+- `scripts/sync-party-logos.mjs`: refreshes party logos from INEC's official party list.
 
 ## Party Logos
 

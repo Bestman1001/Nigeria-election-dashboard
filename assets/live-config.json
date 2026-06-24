@@ -2,6 +2,10 @@
   "enabled": false,
   "endpoint": "assets/live-results.json",
   "intervalSeconds": 30,
+  "mode": "github-actions-mirrored-feed",
+  "dashboardPollingSeconds": 30,
+  "mirrorWorkflow": ".github/workflows/sync-live-feed.yml",
+  "mirrorSchedule": "every 15 minutes when LIVE_RESULTS_URL is configured",
   "trustedSources": [
     {
       "name": "ERAD",
@@ -14,5 +18,5 @@
       "status": "reference"
     }
   ],
-  "notes": "Set enabled to true or pass ?liveApi=https://trusted-source.example/results.json to start live polling automatically."
+  "notes": "For production live mode, set repository variable or secret LIVE_RESULTS_URL to a trusted JSON endpoint. GitHub Actions mirrors it into assets/live-results.json, and the dashboard polls that same-origin file."
 }
