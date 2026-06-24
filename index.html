@@ -483,10 +483,6 @@
       background: #0e1714;
     }
 
-    .leaflet-tile {
-      filter: brightness(.58) contrast(1.16) saturate(.72) hue-rotate(150deg);
-    }
-
     .leaflet-control-zoom a,
     .leaflet-control-attribution {
       background: rgba(8, 17, 15, .88) !important;
@@ -667,7 +663,7 @@
     <section class="detail">
       <div>
         <h2 id="detailTitle">Nigeria</h2>
-        <div class="detail-sub" id="detailSubtitle">2023 presidential result by state. State boundaries and LGA boundaries are loaded from geoBoundaries/GRID3.</div>
+        <div class="detail-sub" id="detailSubtitle">2023 presidential result by state. Nigeria state and LGA boundaries are loaded from geoBoundaries/GRID3.</div>
       </div>
       <div class="chart-wrap">
         <canvas id="resultChart" height="260"></canvas>
@@ -1034,11 +1030,14 @@
     }
 
     function initMap() {
-      map = L.map("map", { zoomControl: true, attributionControl: true }).setView([9.1, 8.7], 6);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution: "&copy; OpenStreetMap contributors"
-      }).addTo(map);
+      map = L.map("map", {
+        zoomControl: true,
+        attributionControl: true,
+        minZoom: 5,
+        maxZoom: 10,
+        maxBounds: [[3.0, 2.0], [14.5, 15.5]],
+        maxBoundsViscosity: 1
+      }).setView([9.1, 8.7], 6);
       map.attributionControl.setPrefix(false);
       map.attributionControl.addAttribution("Boundaries: geoBoundaries/GRID3");
     }
@@ -1050,7 +1049,7 @@
       if (lgaLayer) map.removeLayer(lgaLayer);
       if (stateLayer) map.removeLayer(stateLayer);
       stateLayer = L.geoJSON(statesGeo, { style: styleFeature, onEachFeature: bindState }).addTo(map);
-      map.fitBounds(stateLayer.getBounds(), { padding: [18, 18] });
+      map.fitBounds(stateLayer.getBounds(), { padding: [18, 18], maxZoom: 7 });
       updateCounts();
       updateLegend();
     }
@@ -1100,7 +1099,7 @@
       if (lgaLayer) map.removeLayer(lgaLayer);
       const features = selectedStateFeature ? lgasWithinSelectedState() : lgasGeo.features;
       lgaLayer = L.geoJSON({ type: "FeatureCollection", features }, { style: styleFeature, onEachFeature: bindLga }).addTo(map);
-      if (lgaLayer.getBounds().isValid()) map.fitBounds(lgaLayer.getBounds(), { padding: [18, 18] });
+      if (lgaLayer.getBounds().isValid()) map.fitBounds(lgaLayer.getBounds(), { padding: [18, 18], maxZoom: 8 });
       updateCounts(features.length);
       updateLegend();
     }
