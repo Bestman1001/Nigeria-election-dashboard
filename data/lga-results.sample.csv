@@ -1,0 +1,4 @@
+election_id,year,type,office,state,lga,ward,candidate,party,votes,registered,accredited,valid,rejected,total_votes,turnout,source_url,result_status
+sample-lga-results,2026,off-cycle,Governor,Lagos,Ikeja,,Candidate A,APC,1200,5000,2500,2400,100,2500,50,https://example.com/official-sheet,verified-sample
+sample-lga-results,2026,off-cycle,Governor,Lagos,Ikeja,,Candidate B,PDP,800,5000,2500,2400,100,2500,50,https://example.com/official-sheet,verified-sample
+sample-lga-results,2026,off-cycle,Governor,Lagos,Ikeja,,Candidate C,LP,400,5000,2500,2400,100,2500,50,https://example.com/official-sheet,verified-sample
