@@ -8,7 +8,6 @@ Interactive static dashboard for exploring Nigerian election results by state an
 - Nigeria-only dark map canvas with visible state and LGA labels.
 - 2023 Nigerian presidential state-level result dataset.
 - Uploaded historical presidential and gubernatorial CSV datasets from 1999 through 2022.
-- 2023 presidential LGA result subset extracted from numeric Wikipedia state LGA tables with source URLs preserved.
 - Search, state drill-down, map metrics, party winner coloring, INEC party logos, chart, table, and CSV import workflow.
 - Live-feed controls for trusted JSON/API result sources.
 
@@ -39,21 +38,6 @@ node scripts/import-lga-results.mjs --input data/lga-results.csv --election-id 2
 ```
 
 The importer validates LGA names against `assets/nigeria-lgas.geojson`, groups party rows, and writes `assets/lga-results.js`. If an LGA name is not matched, the script stops so the map is not published with broken joins.
-
-The current bundled LGA dataset is:
-
-- `2023-presidential-lga-wikipedia`
-- Coverage: 110 LGAs with numeric LGA-level results.
-- Status: `verified-secondary-partial`.
-- Source: Wikipedia state LGA tables that contain numeric results and cite INEC/media result reports. Placeholder-only `TBD` tables are skipped.
-
-To refresh it:
-
-```bash
-node scripts/fetch-2023-presidential-lga-wikipedia.mjs
-node scripts/import-lga-results.mjs --input data/2023-presidential-lga-wikipedia.csv --election-id 2023-presidential-lga-wikipedia --label "2023 Presidential - verified LGA results" --status verified-secondary-partial --source "Wikipedia state LGA tables with numeric results citing INEC/media result reports"
-node scripts/report-lga-coverage.mjs
-```
 
 Best source order for LGA data:
 
@@ -127,8 +111,6 @@ The repository includes:
 - `scripts/sync-live-feed.mjs`: validates live result JSON before writing it.
 - `scripts/sync-party-logos.mjs`: refreshes party logos from INEC's official party list.
 - `scripts/import-lga-results.mjs`: validates and converts source-backed LGA CSVs into dashboard data.
-- `scripts/fetch-2023-presidential-lga-wikipedia.mjs`: extracts numeric 2023 presidential LGA tables from source pages.
-- `scripts/report-lga-coverage.mjs`: reports which boundary LGAs are covered by an LGA dataset.
 
 ## Party Logos
 

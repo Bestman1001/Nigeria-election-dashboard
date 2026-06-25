@@ -811,7 +811,6 @@
       ["fct", "Federal Capital Territory"],
       ["f.c.t.", "Federal Capital Territory"],
       ["federal capital territory", "Federal Capital Territory"],
-      ["abuja federal capital territory", "Federal Capital Territory"],
       ["abuja", "Federal Capital Territory"]
     ]);
 
@@ -889,25 +888,9 @@
       return selected.rows.concat(importedRows.filter((r) => r.election_id === selected.id));
     }
 
-    function aggregateRows(rows, target = {}) {
-      return rows.reduce((summary, row) => {
-        summary.parties = summary.parties || {};
-        Object.entries(row.parties || {}).forEach(([party, votes]) => {
-          summary.parties[party] = (summary.parties[party] || 0) + Number(votes || 0);
-        });
-        summary.valid = (summary.valid || 0) + Number(row.valid || 0);
-        summary.registered = (summary.registered || 0) + Number(row.registered || 0);
-        summary.turnout = summary.registered ? Number(((summary.valid / summary.registered) * 100).toFixed(2)) : 0;
-        return summary;
-      }, { ...target, parties: { ...(target.parties || {}) }, valid: 0, registered: 0 });
-    }
-
     function rowForState(name) {
       const key = normalizeName(canonicalState(name));
-      const stateRow = electionRows().find((row) => normalizeName(canonicalState(row.state)) === key && !row.lga);
-      if (stateRow) return stateRow;
-      const lgaRows = electionRows().filter((row) => normalizeName(canonicalState(row.state)) === key && row.lga);
-      return lgaRows.length ? aggregateRows(lgaRows, { state: canonicalState(name), lga: "", ward: "", status: "aggregated-lga" }) : null;
+      return electionRows().find((row) => normalizeName(canonicalState(row.state)) === key && !row.lga);
     }
 
     function rowForLga(feature) {
@@ -920,10 +903,7 @@
 
     function rowsForSelectedScope() {
       const rows = electionRows();
-      if (selectedName === "Nigeria") {
-        const stateRows = rows.filter((r) => !r.lga);
-        return stateRows.length ? stateRows : rows.filter((r) => r.lga);
-      }
+      if (selectedName === "Nigeria") return rows.filter((r) => !r.lga);
       const stateKey = normalizeName(canonicalState(selectedName));
       const lgaRows = rows.filter((r) => normalizeName(canonicalState(r.state)) === stateKey && r.lga);
       if (lgaRows.length) return lgaRows;
@@ -1247,9 +1227,7 @@
 
     function updateCounts(overrideUnits) {
       const rows = electionRows();
-      const stateRows = rows.filter((r) => !r.lga);
-      const countRows = stateRows.length ? stateRows : rows.filter((r) => r.lga);
-      const valid = countRows.reduce((sum, r) => sum + (r.valid || 0), 0);
+      const valid = rows.filter((r) => !r.lga).reduce((sum, r) => sum + (r.valid || 0), 0);
       const totals = partyTotals(rows);
       const leader = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
       el("levelMetric").textContent = currentLayer === "states" ? "State" : "LGA";
