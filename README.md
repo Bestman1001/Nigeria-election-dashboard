@@ -5,7 +5,7 @@ Interactive static dashboard for exploring Nigerian election results by state an
 ## Current Scope
 
 - Real Nigeria state and LGA boundary layers from geoBoundaries/GRID3.
-- OpenStreetMap basemap.
+- Nigeria-only dark map canvas with visible state and LGA labels.
 - 2023 Nigerian presidential state-level result dataset.
 - Uploaded historical presidential and gubernatorial CSV datasets from 1999 through 2022.
 - Search, state drill-down, map metrics, party winner coloring, INEC party logos, chart, table, and CSV import workflow.
@@ -20,6 +20,31 @@ election_id,year,type,office,state,lga,ward,candidate,party,votes,registered,tur
 ```
 
 Rows are grouped by election, state, LGA, and ward. Party votes are aggregated into the dashboard view.
+
+## LGA Result Pipeline
+
+For verifiable LGA uploads, use one CSV row per party per LGA. Keep `source_url` filled with the INEC/IReV page, official collation PDF, ERAD/Stears page, observer dataset, or state electoral commission source used for that unit.
+
+Recommended columns:
+
+```csv
+election_id,year,type,office,state,lga,ward,candidate,party,votes,registered,accredited,valid,rejected,total_votes,turnout,source_url,result_status
+```
+
+Run the importer from the repository root:
+
+```bash
+node scripts/import-lga-results.mjs --input data/lga-results.csv --election-id 2026-ekiti-governor-lga --label "2026 Ekiti Governor - LGA results"
+```
+
+The importer validates LGA names against `assets/nigeria-lgas.geojson`, groups party rows, and writes `assets/lga-results.js`. If an LGA name is not matched, the script stops so the map is not published with broken joins.
+
+Best source order for LGA data:
+
+1. INEC/IReV result sheets and official final collation documents.
+2. State electoral commission portals for local government elections.
+3. ERAD, Stears, Yiaga Africa, CDD, SBM, Dataphyte, or similar datasets when they publish source-backed unit results.
+4. Wikipedia/news tables only as secondary references, and only when they cite official result documents.
 
 ## Live API
 
@@ -85,6 +110,7 @@ The repository includes:
 - `.github/workflows/sync-party-logos.yml`: refreshes current INEC party logos weekly and can be run manually.
 - `scripts/sync-live-feed.mjs`: validates live result JSON before writing it.
 - `scripts/sync-party-logos.mjs`: refreshes party logos from INEC's official party list.
+- `scripts/import-lga-results.mjs`: validates and converts source-backed LGA CSVs into dashboard data.
 
 ## Party Logos
 
