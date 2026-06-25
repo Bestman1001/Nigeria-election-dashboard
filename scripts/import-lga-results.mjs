@@ -15,6 +15,8 @@ const inputPath = path.resolve(args.get("--input") || defaultInput);
 const outputPath = path.resolve(args.get("--output") || defaultOutput);
 const electionId = args.get("--election-id") || "";
 const label = args.get("--label") || "";
+const status = args.get("--status") || "";
+const source = args.get("--source") || "";
 
 function parseCsv(text) {
   const rows = [];
@@ -168,8 +170,8 @@ const dataset = {
   office: first.office || "Election",
   label: label || `${first.year || "Imported"} ${first.office || "LGA"} results`,
   granularity: "lga",
-  status: sourceWarnings.length ? "needs-source-review" : "verified-import",
-  source: `Imported from ${path.basename(inputPath)}`,
+  status: status || (sourceWarnings.length ? "needs-source-review" : "verified-import"),
+  source: source || `Imported from ${path.basename(inputPath)}`,
   rows
 };
 
