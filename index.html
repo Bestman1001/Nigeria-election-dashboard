@@ -507,35 +507,6 @@
       min-width: 180px;
     }
 
-    .map-label {
-      border: 0;
-      background: rgba(7, 16, 14, .72);
-      color: #effbf6;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
-      border-radius: 4px;
-      padding: 3px 6px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
-      pointer-events: none;
-    }
-
-    .map-label.lga-label {
-      background: rgba(7, 16, 14, .58);
-      color: #d8eee6;
-      font-size: 9px;
-      padding: 2px 4px;
-      font-weight: 700;
-    }
-
-    .leaflet-tooltip-top.map-label::before,
-    .leaflet-tooltip-bottom.map-label::before,
-    .leaflet-tooltip-left.map-label::before,
-    .leaflet-tooltip-right.map-label::before {
-      display: none;
-    }
-
     .popup-title {
       font-weight: 800;
       margin-bottom: 4px;
@@ -718,7 +689,6 @@
   </div>
 
   <script src="assets/historical-elections.js"></script>
-  <script src="assets/lga-results.js"></script>
   <script src="assets/party-logos/party-logos.js"></script>
   <script>
     const stateGeoUrl = "assets/nigeria-states.geojson";
@@ -805,7 +775,7 @@
         source: "Awaiting official/state/LGA CSV imports",
         rows: []
       }
-    ].concat(window.historicalElectionDatasets || [], window.lgaElectionDatasets || []);
+    ].concat(window.historicalElectionDatasets || []);
 
     const stateAliases = new Map([
       ["fct", "Federal Capital Territory"],
@@ -832,7 +802,6 @@
 
     let map, stateLayer, lgaLayer, selectedStateFeature = null, selectedName = "Nigeria";
     let statesGeo = null, lgasGeo = null, currentLayer = "states", chart;
-    let lgaStateIndex = new Map();
     let usingFallbackMap = false;
     let liveTimer = null;
     let liveConfig = { endpoint: "assets/live-results.json", intervalSeconds: 30, enabled: false };
@@ -873,11 +842,6 @@
       return p.shapeName || p.ADM1_NAME || p.ADM2_NAME || p.admin1Name || p.admin2Name || p.name || p.NAME_1 || p.NAME_2 || "Unknown";
     }
 
-    function featureId(feature) {
-      const p = feature.properties || {};
-      return p.shapeID || p.shapeISO || `${featureName(feature)}-${p.shapeType || ""}`;
-    }
-
     function currentElection() {
       return elections.find((e) => e.id === el("electionSelect").value) || elections[0];
     }
@@ -891,14 +855,6 @@
     function rowForState(name) {
       const key = normalizeName(canonicalState(name));
       return electionRows().find((row) => normalizeName(canonicalState(row.state)) === key && !row.lga);
-    }
-
-    function rowForLga(feature) {
-      const lgaKey = normalizeName(featureName(feature));
-      const inferredState = stateForLga(feature);
-      const stateKey = normalizeName(canonicalState(inferredState || selectedName));
-      const rows = electionRows().filter((row) => row.lga && normalizeName(row.lga) === lgaKey);
-      return rows.find((row) => normalizeName(canonicalState(row.state)) === stateKey) || rows[0] || null;
     }
 
     function rowsForSelectedScope() {
@@ -983,8 +939,7 @@
     function colorForFeature(feature) {
       const metric = el("metricSelect").value;
       const name = featureName(feature);
-      const isLga = (feature.properties || {}).shapeType === "ADM2";
-      const row = isLga ? rowForLga(feature) : rowForState(name);
+      const row = currentLayer === "states" ? rowForState(name) : null;
       if (!row) return "#d5ddd2";
       const win = winner(row);
       if (metric === "winner") return getPartyColor(win.party);
@@ -1010,14 +965,12 @@
     }
 
     function styleFeature(feature) {
-      const isLga = (feature.properties || {}).shapeType === "ADM2";
-      const hasResult = isLga ? Boolean(rowForLga(feature)) : Boolean(rowForState(featureName(feature)));
       return {
         color: "#ffffff",
-        weight: isLga ? .8 : 1.4,
+        weight: currentLayer === "states" ? 1.4 : .8,
         opacity: 1,
         fillColor: colorForFeature(feature),
-        fillOpacity: isLga ? (hasResult ? .72 : .24) : .82
+        fillOpacity: currentLayer === "states" ? .82 : .28
       };
     }
 
@@ -1026,11 +979,6 @@
       const row = rowForState(name);
       const win = winner(row);
       layer.bindPopup(popupHtml(name, row, win));
-      layer.bindTooltip(canonicalState(name), {
-        permanent: true,
-        direction: "center",
-        className: "map-label"
-      });
       layer.on({
         mouseover: (e) => e.target.setStyle({ weight: 3, color: "#111c18" }),
         mouseout: (e) => stateLayer.resetStyle(e.target),
@@ -1040,28 +988,19 @@
 
     function bindLga(feature, layer) {
       const name = featureName(feature);
-      const row = rowForLga(feature);
-      const win = winner(row);
-      const state = stateForLga(feature);
-      layer.bindPopup(popupHtml(name, row, win, state || "LGA boundary"));
-      layer.bindTooltip(name, {
-        permanent: true,
-        direction: "center",
-        className: "map-label lga-label"
-      });
+      layer.bindPopup(`<div class="popup-title">${name}</div><div class="popup-line">LGA boundary</div><div class="popup-line">Import LGA-level results to color this unit.</div>`);
       layer.on({
         mouseover: (e) => e.target.setStyle({ weight: 2, color: "#111c18", fillOpacity: .45 }),
         mouseout: (e) => lgaLayer.resetStyle(e.target)
       });
     }
 
-    function popupHtml(name, row, win, scopeLabel = "") {
+    function popupHtml(name, row, win) {
       if (!row) {
-        return `<div class="popup-title">${name}</div><div class="popup-line">${scopeLabel || "No result loaded for this election."}</div><div class="popup-line">No result loaded for this election.</div>`;
+        return `<div class="popup-title">${name}</div><div class="popup-line">No result loaded for this election.</div>`;
       }
       return `
         <div class="popup-title">${name}</div>
-        ${scopeLabel ? `<div class="popup-line">${scopeLabel}</div>` : ""}
         <div class="popup-line">Winner: ${partyMark(win.party)} ${win.party} (${fmt.format(win.votes)} votes)</div>
         <div class="popup-line">Margin: ${fmt.format(win.margin)} votes</div>
         <div class="popup-line">Turnout: ${row.turnout}%</div>
@@ -1073,7 +1012,6 @@
       try {
         if (!statesGeo || force) statesGeo = await fetchJson(stateGeoUrl);
         if (!lgasGeo || force) lgasGeo = await fetchJson(lgaGeoUrl);
-        buildLgaStateIndex();
         usingFallbackMap = false;
         renderStateLayer();
         el("dataStatus").textContent = "Map ready";
@@ -1102,34 +1040,6 @@
       }).setView([9.1, 8.7], 6);
       map.attributionControl.setPrefix(false);
       map.attributionControl.addAttribution("Boundaries: geoBoundaries/GRID3");
-      map.on("zoomend", updateLabelVisibility);
-    }
-
-    function buildLgaStateIndex() {
-      lgaStateIndex = new Map();
-      if (!statesGeo || !lgasGeo) return;
-      lgasGeo.features.forEach((lga) => {
-        try {
-          const centroid = turf.centroid(lga);
-          const state = statesGeo.features.find((feature) => turf.booleanPointInPolygon(centroid, feature));
-          if (state) {
-            lgaStateIndex.set(featureId(lga), canonicalState(featureName(state)));
-          }
-        } catch {
-          // Keep the LGA usable even if a boundary geometry is malformed.
-        }
-      });
-    }
-
-    function stateForLga(feature) {
-      return lgaStateIndex.get(featureId(feature)) || "";
-    }
-
-    function updateLabelVisibility() {
-      const zoom = map?.getZoom?.() || 0;
-      document.querySelectorAll(".lga-label").forEach((label) => {
-        label.style.display = currentLayer === "lgas" || selectedStateFeature || zoom >= 8 ? "" : "none";
-      });
     }
 
     function renderStateLayer() {
@@ -1140,7 +1050,6 @@
       if (stateLayer) map.removeLayer(stateLayer);
       stateLayer = L.geoJSON(statesGeo, { style: styleFeature, onEachFeature: bindState }).addTo(map);
       map.fitBounds(stateLayer.getBounds(), { padding: [18, 18], maxZoom: 7 });
-      updateLabelVisibility();
       updateCounts();
       updateLegend();
     }
@@ -1191,7 +1100,6 @@
       const features = selectedStateFeature ? lgasWithinSelectedState() : lgasGeo.features;
       lgaLayer = L.geoJSON({ type: "FeatureCollection", features }, { style: styleFeature, onEachFeature: bindLga }).addTo(map);
       if (lgaLayer.getBounds().isValid()) map.fitBounds(lgaLayer.getBounds(), { padding: [18, 18], maxZoom: 8 });
-      updateLabelVisibility();
       updateCounts(features.length);
       updateLegend();
     }
@@ -1244,11 +1152,7 @@
         : `Loaded result detail for ${selectedName}. LGA-level figures appear when imported.`;
       renderChart(rows);
       renderTable(rows);
-      if (stateLayer && currentLayer === "states") {
-        stateLayer.setStyle(styleFeature);
-      } else if (stateLayer) {
-        stateLayer.setStyle({ fillOpacity: .08, weight: 1, color: "#4b5a53" });
-      }
+      if (stateLayer) stateLayer.setStyle(styleFeature);
       updateCounts();
     }
 

@@ -1,1 +1,0 @@
-window.lgaElectionDatasets = window.lgaElectionDatasets || [];
